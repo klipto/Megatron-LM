@@ -159,20 +159,24 @@ class _Timer:
         self.name_ = name
         self.elapsed_ = 0.0
         self.started_ = False
-        self.start_time = time.time()
+        #self.start_time = time.time()
+        self.start_event = None
 
     def start(self):
         """Start the timer."""
         assert not self.started_, 'timer has already been started'
         torch.cuda.synchronize()
-        self.start_time = time.time()
+        self.start_event = torch.cuda.Event(enable_timing=True)
+        self.end_event = torch.cuda.Event(enable_timing=True)
+        self.start_event.record()
         self.started_ = True
 
     def stop(self):
         """Stop the timer."""
         assert self.started_, 'timer is not started'
+        self.end_event.record()
         torch.cuda.synchronize()
-        self.elapsed_ += (time.time() - self.start_time)
+        self.elapsed_ += (self.start_event.elapsed_time(self.end_event) / 1000.0)
         self.started_ = False
 
     def reset(self):
