@@ -28,10 +28,14 @@ class DistributedDataParallel(MegatronModule):
     def __init__(self, module):
         super(DistributedDataParallel, self).__init__()
         self.warn_on_half = True if dist._backend == dist.dist_backend.GLOO else False
-
+        
         self.module = module
         self.data_parallel_group = mpu.get_data_parallel_group()
-
+        self.firstMoments = None
+        self.secondMoments = None
+        self.counts = None
+        self.totalCounts = None
+        
         def allreduce_params(reduce_after=True, no_scale=False, fp32_allreduce=False):
             if(self.needs_reduction):
                 self.needs_reduction = False
@@ -47,20 +51,43 @@ class DistributedDataParallel(MegatronModule):
                         print("WARNING: gloo dist backend for half parameters may be extremely slow." +
                               " It is recommended to use the NCCL backend in this case.")
                         self.warn_on_half = False
+
+                assert len(buckets) == 1
                 for tp in buckets:
                     bucket = buckets[tp]
+                    params =[param.data for param in bucket]
                     grads = [param.grad.data for param in bucket]
-                    coalesced = _flatten_dense_tensors(grads)
-                    if fp32_allreduce:
-                        coalesced = coalesced.float()
-                    if not no_scale and not reduce_after:
-                        coalesced /= dist.get_world_size(group=self.data_parallel_group)
-                    dist.all_reduce(coalesced, group=self.data_parallel_group)
-                    torch.cuda.synchronize()
-                    if not no_scale and reduce_after:
-                        coalesced /= dist.get_world_size(group=self.data_parallel_group)
-                    for buf, synced in zip(grads, _unflatten_dense_tensors(coalesced, grads)):
-                        buf.copy_(synced)
+                    if (self.firstMoments == None):
+                        self.firstMoments = [
+                            torch.empty_like(param) for param in bucket
+                        ]
+                        self.secondMoments = [
+                            torch.empty_like(param) for param in bucket
+                        ]
+                        self.counts = [param.numel() for param in bucket]
+                        self.totalCount = sum(self.counts)
+                        
+                    alpha, beta1, beta2 = 0.001, 0.9, 0.99
+                    dist.ncclAllReduceScatteredAdam(
+                        grads,
+                        params,
+                        self.firstMoments,
+                        self.secondMoments,
+                        len(grads),
+                        self.counts,
+                        self.totalCounts,
+                        alpha, beta1, beta2)
+                    # coalesced = _flatten_dense_tensors(grads)
+                    # if fp32_allreduce:
+                    #     coalesced = coalesced.float()
+                    # if not no_scale and not reduce_after:
+                    #     coalesced /= dist.get_world_size(group=self.data_parallel_group)
+                    # dist.all_reduce(coalesced, group=self.data_parallel_group)
+                    # torch.cuda.synchronize()
+                    # if not no_scale and reduce_after:
+                    #     coalesced /= dist.get_world_size(group=self.data_parallel_group)
+                    # for buf, synced in zip(grads, _unflatten_dense_tensors(coalesced, grads)):
+                    #     buf.copy_(synced)
         self.hook_handles = []
         self.hooks = []
         for param in list(self.module.parameters()):

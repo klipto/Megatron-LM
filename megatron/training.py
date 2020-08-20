@@ -163,6 +163,7 @@ def get_optimizer(model):
             if not hasattr(param, 'model_parallel'):
                 param.model_parallel = False
 
+    return torch.optim.SGD(param_groups,lr=args.lr)
     # Use Adam.
     optimizer = Adam(param_groups, lr=args.lr, weight_decay=args.weight_decay)
 
@@ -227,7 +228,7 @@ def backward_step(optimizer, model, loss):
     timers = get_timers()
 
     # Backward pass.
-    optimizer.zero_grad(set_grads_to_None=True)
+    optimizer.zero_grad()#set_grads_to_None=True)
     if args.fp16:
         optimizer.backward(loss, update_master_grads=False)
     else:
@@ -270,7 +271,7 @@ def train_step(forward_step_func, data_iterator,
 
     # Update parameters.
     timers('optimizer').start()
-    optimizer.step()
+    #optimizer.step()
     timers('optimizer').stop()
 
     # Update learning rate.
