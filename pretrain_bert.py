@@ -14,7 +14,12 @@
 # limitations under the License.
 
 """Pretrain BERT"""
-
+import os
+os.environ['MASTER_ADDR'] = '10.184.185.18'
+os.environ['MASTER_PORT'] = '10604'
+os.environ['RANK'] = os.environ['OMPI_COMM_WORLD_RANK']
+os.environ['WORLD_SIZE'] = os.environ['OMPI_COMM_WORLD_SIZE']
+    
 import torch
 import torch.nn.functional as F
 
