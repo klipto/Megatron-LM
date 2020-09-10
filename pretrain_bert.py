@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-
-"""Pretrain BERT"""
-import os
+#import os
 #os.environ['MASTER_ADDR'] = '10.184.185.21'
 #os.environ['MASTER_PORT'] = '14851'
 #os.environ['RANK'] = os.environ['OMPI_COMM_WORLD_RANK']
 #os.environ['WORLD_SIZE'] = os.environ['OMPI_COMM_WORLD_SIZE']
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+"""Pretrain BERT"""
 import torch
 import torch.nn.functional as F
 

@@ -1,10 +1,11 @@
 #!/bin/bash
-
+set -x
+#export NCCL_COMM_ID="localhost:12101"
 GPUS_PER_NODE=16
 # Change for multinode config
-MASTER_ADDR=localhost
-MASTER_PORT=6000
-NNODES=1
+MASTER_ADDR=10.184.185.21
+MASTER_PORT=10605
+NNODES=2
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
@@ -12,18 +13,20 @@ DATA_PATH=/philly/rr3/msrhyperprojvc2_scratch/saemal/amir/data/wikidata/raid/Meg
 CHECKPOINT_PATH=/philly/rr3/msrhyperprojvc2_scratch/saemal/amir/data/wikidata/raid/checkpoint
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
-#export NCCL_PROTO=Simple
-#export NCCL_DEBUG=INFO
-python -m torch.distributed.launch $DISTRIBUTED_ARGS \
+#DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
+#-hostfile hostfile
+#which python
+#python -m torch.distributed.launch $DISTRIBUTED_ARGS \
+mpirun  --allow-run-as-root  -hostfile hostfile python  \
        pretrain_bert.py \
-       --model-parallel-size 16 \
+       --model-parallel-size 32 \
        --num-layers 24 \
        --hidden-size 1024 \
-       --num-attention-heads 16 \
+       --num-attention-heads 32 \
        --batch-size 64 \
        --seq-length 512 \
        --max-position-embeddings 512 \
-       --train-iters 10 \
+       --train-iters 100 \
        --data-path $DATA_PATH \
        --vocab-file /philly/rr3/msrhyperprojvc2_scratch/saemal/amir/data/wikidata/raid/Megatron-LM/bert-large-uncased-vocab.txt \
        --data-impl mmap \
@@ -38,3 +41,4 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --warmup .01 \
        --log-interval 1 \
        --fp16
+       
