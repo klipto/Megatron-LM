@@ -79,15 +79,15 @@ class ParallelMLP(MegatronModule):
 
         self.dropout = torch.nn.Dropout(args.hidden_dropout)
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states, add_ten):
 
         # [b, s, 4hp]
         intermediate_parallel = self.dense_h_to_4h(hidden_states)
         intermediate_parallel = self.activation_func(intermediate_parallel)
 
         # [b, s, h]
-        output = self.dense_4h_to_h(intermediate_parallel)
-        output = self.dropout(output)
+        output = self.dense_4h_to_h(intermediate_parallel, add_ten)
+        #output = self.dropout(output)
         return output
 
 
@@ -208,15 +208,15 @@ class ParallelSelfAttention(MegatronModule):
 
         return context_layer
 
-    def _get_output(self, context_layer):
+    def _get_output(self, context_layer, add_ten):
         """Output layer with dropout."""
         # Output. [b, s, h]
-        output = self.dense(context_layer)
-        output = self.output_dropout(output)
+        output = self.dense(context_layer, add_ten)
+        #output = self.output_dropout(output)
 
         return output
 
-    def forward(self, hidden_states, attention_mask, layer_past=None,
+    def forward(self, hidden_states, attention_mask, add_ten, layer_past=None,
                 get_key_value=False):
         # hidden_states: [b, s, h]
 
@@ -268,7 +268,7 @@ class ParallelSelfAttention(MegatronModule):
         context_layer = self._get_attended_context(attention_probs, value_layer)
 
         # Output. [b, s, h]
-        output = self._get_output(context_layer)
+        output = self._get_output(context_layer, add_ten)
 
         if get_key_value:
             output = [output, present]
@@ -319,31 +319,46 @@ class ParallelTransformerLayer(MegatronModule):
         # Layer norm at the begining of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
         # Self attention.
-        attention_output = self.attention(layernorm_output,
-                                          attention_mask,
-                                          layer_past=layer_past,
-                                          get_key_value=get_key_value)
+        #attention_output = self.attention(layernorm_output,
+        #                                  attention_mask,
+        #                                  layer_past=layer_past,
+        #                                  get_key_value=get_key_value)
         if get_key_value:
-            attention_output, presents = attention_output
+            print('Error: Present is not available')
+        #   attention_output, presents = attention_output
 
         # Residual connection.
         if self.apply_residual_connection_post_layernorm:
-            layernorm_input = layernorm_output + attention_output
+            layernorm_input = self.attention(layernorm_output,
+                                    attention_mask,
+                                    layernorm_output,
+                                    layer_past=layer_past,
+                                    get_key_value=get_key_value)
+            #layernorm_input = layernorm_output + attention_output
         else:
-            layernorm_input = hidden_states + attention_output
+            # always
+            layernorm_input = self.attention(layernorm_output,
+                        attention_mask,
+                        hidden_states,
+                        layer_past=layer_past,
+                        get_key_value=get_key_value)
+            #layernorm_input = hidden_states + attention_output
         # Layer norm post the self attention.
         layernorm_output = self.post_attention_layernorm(layernorm_input)
 
         # MLP.
-        mlp_output = self.mlp(layernorm_output)
+        # mlp_output = self.mlp(layernorm_output)
         # Second residual connection.
         if self.apply_residual_connection_post_layernorm:
-            output = layernorm_output + mlp_output
+            output = self.mlp(layernorm_output, layernorm_output)
+            #output = layernorm_output + mlp_output
         else:
-            output = layernorm_input + mlp_output
+            output = self.mlp(layernorm_output, layernorm_input)
+            #output = layernorm_input + mlp_output
 
         if get_key_value:
-            output = [output, presents]
+            print('Error: Present is not available')
+        #   output = [output, presents]
 
         return output
 

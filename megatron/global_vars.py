@@ -227,8 +227,13 @@ class Timers:
         assert normalizer > 0.0
         string = 'time (ms)'
         for name in names:
-            elapsed_time = self.timers[name].elapsed(
-                reset=reset) * 1000.0 / normalizer
+            if (name == "batch generator"):
+                continue
+            if(name == "forward"):
+                batch_gen_time = self.timers["batch generator"].elapsed(reset=reset) * 1000.0 / normalizer
+                elapsed_time = (self.timers[name].elapsed(reset=reset) * 1000.0 / normalizer) - batch_gen_time
+            else:
+                elapsed_time = self.timers[name].elapsed(reset=reset) * 1000.0 / normalizer
             string += ' | {}: {:.2f}'.format(name, elapsed_time)
         if torch.distributed.is_initialized():
             if torch.distributed.get_rank() == 0:

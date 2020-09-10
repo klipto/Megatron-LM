@@ -96,7 +96,7 @@ def pretrain(train_valid_test_dataset_provider, model_provider,
             iteration, _ = train(forward_step_func,
                                  model, optimizer, lr_scheduler,
                                  train_data_iterator, valid_data_iterator)
-
+    '''
     if args.do_valid:
         prefix = 'the end of training for val data'
         evaluate_and_print_results(prefix, forward_step_func,
@@ -112,6 +112,7 @@ def pretrain(train_valid_test_dataset_provider, model_provider,
         evaluate_and_print_results(prefix, forward_step_func,
                                    test_data_iterator, model,
                                    0, True)
+    '''
 
 
 def get_model(model_provider_func):
@@ -228,6 +229,7 @@ def backward_step(optimizer, model, loss):
 
     # Backward pass.
     optimizer.zero_grad(set_grads_to_None=True)
+    #optimizer.zero_grad()
     if args.fp16:
         optimizer.backward(loss, update_master_grads=False)
     else:
@@ -300,11 +302,16 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     def add_to_logging(name):
         if name in timers.timers:
             timers_to_log.append(name)
+    add_to_logging('total time')
+    add_to_logging('DSL pos Forward')
     add_to_logging('forward')
     add_to_logging('backward')
     add_to_logging('allreduce')
     add_to_logging('optimizer')
     add_to_logging('batch generator')
+    add_to_logging('random generation')
+    add_to_logging('bias in backward')
+    add_to_logging('dropout in backward')
 
     # Tensorboard values.
     if writer and torch.distributed.get_rank() == 0:
@@ -343,9 +350,17 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
 
     return report_memory_flag
 
+#import pos_cuda
 
 def train(forward_step_func, model, optimizer, lr_scheduler,
           train_data_iterator, valid_data_iterator):
+
+    #theId = torch.zeros([128], dtype=torch.int, device="cuda:"+str(torch.distributed.get_rank() % 16))
+    #if(torch.distributed.get_rank() == 0):
+    #    theId = pos_cuda.get_id(theId)
+    #torch.distributed.broadcast(theId, 0)
+    #pos_cuda.init_comm(theId, torch.distributed.get_world_size(), torch.distributed.get_rank())
+
     """Train the model function."""
     args = get_args()
     timers = get_timers()
@@ -363,11 +378,13 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
     timers('interval time').start()
     report_memory_flag = True
     while iteration < args.train_iters:
+        timers('total time').start()
         loss_dict, skipped_iter = train_step(forward_step_func,
                                              train_data_iterator,
                                              model,
                                              optimizer,
                                              lr_scheduler)
+        timers('total time').stop()                                             
         skipped_iters += skipped_iter
         iteration += 1
 
@@ -379,7 +396,8 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
                                           optimizer.param_groups[0]['lr'],
                                           iteration, loss_scale,
                                           report_memory_flag)
-
+        
+        '''
         # Autoresume
         if args.adlr_autoresume and \
            (iteration % args.adlr_autoresume_interval == 0):
@@ -406,6 +424,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
             print_rank_0('rank: {} | time: {} | exiting the program at '
                          'iteration {}'.format(rank, time_str, iteration))
             sys.exit()
+        '''
 
     return iteration, skipped_iters
 
@@ -472,7 +491,7 @@ def build_train_valid_test_data_iterators(
 
     (train_dataloader, valid_dataloader, test_dataloader) = (None, None, None)
 
-    print_rank_0('> building train, validation, and test datasets ...')
+    #print_rank_0('> building train, validation, and test datasets ...')
     # Data loader only on rank 0 of each model parallel group.
     if mpu.get_model_parallel_rank() == 0:
         # Rank, size, and global batch size.
@@ -486,10 +505,10 @@ def build_train_valid_test_data_iterators(
         train_val_test_num_samples = [train_iters * global_batch_size,
                                       eval_iters * global_batch_size,
                                       test_iters * global_batch_size]
-        print_rank_0(' > datasets target sizes (minimum size):')
-        print_rank_0('    train:      {}'.format(train_val_test_num_samples[0]))
-        print_rank_0('    validation: {}'.format(train_val_test_num_samples[1]))
-        print_rank_0('    test:       {}'.format(train_val_test_num_samples[2]))
+        #print_rank_0(' > datasets target sizes (minimum size):')
+        #print_rank_0('    train:      {}'.format(train_val_test_num_samples[0]))
+        #print_rank_0('    validation: {}'.format(train_val_test_num_samples[1]))
+        #print_rank_0('    test:       {}'.format(train_val_test_num_samples[2]))
 
         # Build the datasets.
         train_ds, valid_ds, test_ds = build_train_valid_test_datasets_provider(
@@ -522,15 +541,15 @@ def build_train_valid_test_data_iterators(
     if train_dataloader is not None:
         train_dataloader.batch_sampler.start_iter = args.iteration % \
             len(train_dataloader)
-        print_rank_0('setting training data start iteration to {}'.
-                     format(train_dataloader.batch_sampler.start_iter))
+        #print_rank_0('setting training data start iteration to {}'.
+        #             format(train_dataloader.batch_sampler.start_iter))
     if valid_dataloader is not None:
         start_iter_val = (args.iteration // args.eval_interval) * \
             args.eval_iters
         valid_dataloader.batch_sampler.start_iter = start_iter_val % \
             len(valid_dataloader)
-        print_rank_0('setting validation data start iteration to {}'.
-                     format(valid_dataloader.batch_sampler.start_iter))
+        #print_rank_0('setting validation data start iteration to {}'.
+        #             format(valid_dataloader.batch_sampler.start_iter))
 
     # Build iterators.
     if train_dataloader is not None:

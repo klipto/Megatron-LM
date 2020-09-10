@@ -101,7 +101,7 @@ def parse_args(extra_args_provider=None, defaults={},
     if args.fp16_lm_cross_entropy:
         assert args.fp16, 'lm cross entropy in fp16 only support in fp16 mode.'
 
-    _print_args(args)
+    #_print_args(args)
     return args
 
 

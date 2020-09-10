@@ -13,8 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Pretrain BERT"""
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
+"""Pretrain BERT"""
+import os
+#os.environ['MASTER_ADDR'] = '10.184.185.21'
+#os.environ['MASTER_PORT'] = '14851'
+#os.environ['RANK'] = os.environ['OMPI_COMM_WORLD_RANK']
+#os.environ['WORLD_SIZE'] = os.environ['OMPI_COMM_WORLD_SIZE']
 import torch
 import torch.nn.functional as F
 
@@ -26,7 +33,6 @@ from megatron.data.bert_dataset import build_train_valid_test_datasets
 from megatron.model import BertModel
 from megatron.training import pretrain
 from megatron.utils import reduce_losses
-
 
 def model_provider():
     """Build the model."""
